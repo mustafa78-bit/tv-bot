@@ -4,8 +4,11 @@ import json
 import os
 from datetime import datetime, timedelta
 
-BOT_TOKEN = "8763528906:AAE7rwoVLNfQJaLxkPvmGttBTtcx2Avntjs"
-CHAT_ID = 1307136561
+import os
+
+BOT_TOKEN = os.getenv("8763528906:AAE7rwoVLNfQJaLxkPvmGttBTtcx2Avntjs")
+CHAT_ID = os.getenv("1307136561")
+
 
 CHECK_INTERVAL = 900
 START_PAGE = 2
