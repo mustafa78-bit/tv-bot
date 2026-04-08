@@ -1,10 +1,12 @@
 from flask import Flask, request
 import requests
+import os
 
 app = Flask(__name__)
 
-TOKEN = "8679518067:AAHE-60FofyqLzv1Flo0kG8EYpE69hYS0U4"
-CHAT_ID = "1307136561"
+import os
+TOKEN = os.environ.get("8679518067:AAHE-60FofyqLzv1Flo0kG8EYpE69hYS0U4")
+CHAT_ID = os.environ.get("1307136561")
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -45,4 +47,7 @@ Price: {price}
         return "ERROR", 200
 
 if __name__ == "__main__":
-    app.run(port=5000)
+    import os
+
+port = int(os.environ.get("PORT", 10000))
+app.run(host="0.0.0.0", port=port)
