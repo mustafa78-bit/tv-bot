@@ -1,6 +1,7 @@
 import requests
 import time
 import threading
+import os
 from datetime import datetime, timedelta
 from flask import Flask
 
@@ -29,7 +30,7 @@ session = requests.Session()
 
 # ZAMAN
 def tr_now():
-    return datetime.utcnow() + timedelta(hours=3)
+    return datetime.now() + timedelta(hours=3)
 
 def tr_str():
     return tr_now().strftime("%d.%m.%Y %H:%M")
@@ -37,7 +38,7 @@ def tr_str():
 # TELEGRAM
 def send_telegram(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": text})
+    requests.post(url, data={"chat_id": CHAT_ID, "text": text}, timeout=20)
 
 # API
 def get_page(page):
@@ -73,11 +74,16 @@ def filter_coin(c):
     p1h = c.get("price_change_percentage_1h_in_currency") or 0
     p24 = c.get("price_change_percentage_24h_in_currency") or 0
 
-    if rank < 200 or rank > 600: return False
-    if vol < 4_000_000: return False
-    if (vol / mc) < 0.02: return False
-    if p24 < -8 or p24 > 14: return False
-    if p1h < -2: return False
+    if rank < 200 or rank > 600:
+        return False
+    if vol < 4_000_000:
+        return False
+    if (vol / mc) < 0.02:
+        return False
+    if p24 < -8 or p24 > 14:
+        return False
+    if p1h < -2:
+        return False
 
     return True
 
@@ -87,10 +93,14 @@ def score(c):
     p1h = c.get("price_change_percentage_1h_in_currency") or 0
     p24 = c.get("price_change_percentage_24h_in_currency") or 0
 
-    if 0.3 <= p1h <= 2.5: s += 40
-    if 2 <= p24 <= 10: s += 30
-    if c.get("total_volume",0) > 10_000_000: s += 20
-    if 220 <= (c.get("market_cap_rank") or 9999) <= 450: s += 10
+    if 0.3 <= p1h <= 2.5:
+        s += 40
+    if 2 <= p24 <= 10:
+        s += 30
+    if c.get("total_volume", 0) > 10_000_000:
+        s += 20
+    if 220 <= (c.get("market_cap_rank") or 9999) <= 450:
+        s += 10
 
     return s
 
@@ -109,6 +119,7 @@ def analyze():
     selected.sort(key=lambda x: x[1], reverse=True)
 
     if not selected:
+        print("Uygun coin yok")
         return
 
     msg = f"💎 GEM RADAR\n🕒 {tr_str()}\n\n"
@@ -118,6 +129,7 @@ def analyze():
         price = c.get("current_price") or 0
         msg += f"{symbol}\nFiyat: ${price:.4f}\nSkor: {sc}\n\n"
 
+    print(msg)
     send_telegram(msg)
 
 # LOOP
@@ -130,10 +142,12 @@ def radar_loop():
                 time.sleep(ACTIVE_SLEEP)
             else:
                 time.sleep(SLEEP_MODE)
-        except:
+        except Exception as e:
+            print("Hata:", e)
             time.sleep(60)
 
 # MAIN
 if __name__ == "__main__":
     threading.Thread(target=radar_loop, daemon=True).start()
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
