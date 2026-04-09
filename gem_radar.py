@@ -16,8 +16,9 @@ CHAT_ID = "1307136561"
 # =========================
 START_HOUR = 8
 END_HOUR = 22
-ACTIVE_SLEEP = 7200
-SLEEP_MODE = 300
+
+ACTIVE_SLEEP = 14400   # 🔥 4 SAAT
+SLEEP_MODE = 300       # gece kontrol
 
 START_PAGE = 2
 END_PAGE = 6
@@ -39,7 +40,7 @@ session.headers.update({
 })
 
 # =========================
-# ZAMAN
+# ZAMAN (TR)
 # =========================
 def tr_now():
     return datetime.utcnow() + timedelta(hours=3)
@@ -48,7 +49,7 @@ def tr_str():
     return tr_now().strftime("%d.%m.%Y %H:%M")
 
 # =========================
-# TELEGRAM GÖNDER
+# TELEGRAM
 # =========================
 def send_telegram(text):
     try:
@@ -58,7 +59,7 @@ def send_telegram(text):
             "text": text
         }
         r = requests.post(url, data=data, timeout=20)
-        print("Telegram:", r.status_code, r.text[:200])
+        print("Telegram:", r.status_code)
     except Exception as e:
         print("Telegram hata:", e)
 
@@ -79,10 +80,8 @@ def get_page(page):
         r = session.get(url, params=params, timeout=20)
         if r.status_code == 200:
             return r.json()
-        print("CoinGecko hata:", r.status_code)
         return []
-    except Exception as e:
-        print("CoinGecko exception:", e)
+    except:
         return []
 
 def get_all_data():
@@ -154,7 +153,7 @@ def analyze():
     selected.sort(key=lambda x: x[1], reverse=True)
 
     if not selected:
-        print("Uygun coin yok")
+        send_telegram("⚠️ GEM yok (tarama yapıldı)")
         return
 
     msg = f"💎 GEM RADAR\n🕒 {tr_str()}\n\n"
@@ -175,14 +174,13 @@ def analyze():
             f"Skor: {sc}\n\n"
         )
 
-    print(msg)
     send_telegram(msg)
 
 # =========================
 # LOOP
 # =========================
 def radar_loop():
-    send_telegram("🚀 GEM RADAR AKTIF - sistem çalışıyor")
+    send_telegram("🚀 GEM RADAR AKTIF")
 
     while True:
         try:
@@ -191,15 +189,15 @@ def radar_loop():
 
             if START_HOUR <= hour < END_HOUR:
                 analyze()
-                print(f"{ACTIVE_SLEEP} saniye bekleniyor...")
+                print("4 saat bekleniyor...")
                 time.sleep(ACTIVE_SLEEP)
             else:
                 print("Uyku modu...")
                 time.sleep(SLEEP_MODE)
 
         except Exception as e:
-            print("Genel hata:", e)
-            send_telegram(f"⚠️ GEM RADAR HATA: {e}")
+            print("Hata:", e)
+            send_telegram(f"⚠️ HATA: {e}")
             time.sleep(60)
 
 # =========================
