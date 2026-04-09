@@ -18,18 +18,21 @@ def send_telegram(message):
         "text": message
     }
 
-    r = requests.post(url, data=data, timeout=15)
-    print("Telegram status:", r.status_code, r.text)
+    try:
+        r = requests.post(url, data=data, timeout=15)
+        print("Telegram cevap:", r.status_code, r.text)
+    except Exception as e:
+        print("Telegram gönderim hatası:", str(e))
 
 @app.route("/")
 def home():
-    return "TV Alarm Bot OK", 200
+    return "BOT AKTIF", 200
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
         data = request.get_json(force=True) or {}
-        print("Gelen data:", data)
+        print("Gelen veri:", data)
 
         signal = data.get("signal", "YOK")
         ticker = data.get("ticker", "YOK")
@@ -47,9 +50,10 @@ Price: {price}
         return "OK", 200
 
     except Exception as e:
-        print("HATA:", str(e))
+        print("WEBHOOK HATA:", str(e))
         return "ERROR", 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
+    print(f"Sunucu başlıyor, port: {port}")
     app.run(host="0.0.0.0", port=port)
