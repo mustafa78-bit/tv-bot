@@ -5,11 +5,15 @@ import os
 from datetime import datetime, timedelta
 from flask import Flask
 
+# =========================
 # TELEGRAM
+# =========================
 BOT_TOKEN = "8763528906:AAE7rwoVLNfQJaLxkPvmGttBTtcx2Avntjs"
 CHAT_ID = "1307136561"
 
-# AYAR
+# =========================
+# AYARLAR
+# =========================
 START_HOUR = 8
 END_HOUR = 22
 ACTIVE_SLEEP = 7200
@@ -25,22 +29,42 @@ app = Flask(__name__)
 def home():
     return "GEM RADAR AKTIF"
 
+# =========================
 # SESSION
+# =========================
 session = requests.Session()
+session.headers.update({
+    "accept": "application/json",
+    "user-agent": "Mozilla/5.0"
+})
 
+# =========================
 # ZAMAN
+# =========================
 def tr_now():
-    return datetime.now() + timedelta(hours=3)
+    return datetime.utcnow() + timedelta(hours=3)
 
 def tr_str():
     return tr_now().strftime("%d.%m.%Y %H:%M")
 
-# TELEGRAM
+# =========================
+# TELEGRAM GÖNDER
+# =========================
 def send_telegram(text):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": text}, timeout=20)
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        data = {
+            "chat_id": CHAT_ID,
+            "text": text
+        }
+        r = requests.post(url, data=data, timeout=20)
+        print("Telegram:", r.status_code, r.text[:200])
+    except Exception as e:
+        print("Telegram hata:", e)
 
-# API
+# =========================
+# COINGECKO
+# =========================
 def get_page(page):
     url = "https://api.coingecko.com/api/v3/coins/markets"
     params = {
@@ -55,8 +79,10 @@ def get_page(page):
         r = session.get(url, params=params, timeout=20)
         if r.status_code == 200:
             return r.json()
+        print("CoinGecko hata:", r.status_code)
         return []
-    except:
+    except Exception as e:
+        print("CoinGecko exception:", e)
         return []
 
 def get_all_data():
@@ -66,7 +92,9 @@ def get_all_data():
         time.sleep(2)
     return coins
 
+# =========================
 # FİLTRE
+# =========================
 def filter_coin(c):
     rank = c.get("market_cap_rank") or 9999
     vol = c.get("total_volume") or 0
@@ -87,25 +115,32 @@ def filter_coin(c):
 
     return True
 
+# =========================
 # SKOR
+# =========================
 def score(c):
     s = 0
     p1h = c.get("price_change_percentage_1h_in_currency") or 0
     p24 = c.get("price_change_percentage_24h_in_currency") or 0
+    vol = c.get("total_volume", 0)
+    rank = c.get("market_cap_rank") or 9999
 
     if 0.3 <= p1h <= 2.5:
         s += 40
     if 2 <= p24 <= 10:
         s += 30
-    if c.get("total_volume", 0) > 10_000_000:
+    if vol > 10_000_000:
         s += 20
-    if 220 <= (c.get("market_cap_rank") or 9999) <= 450:
+    if 220 <= rank <= 450:
         s += 10
 
     return s
 
+# =========================
 # ANALİZ
+# =========================
 def analyze():
+    print("Tarama başladı...")
     coins = get_all_data()
     selected = []
 
@@ -127,26 +162,49 @@ def analyze():
     for c, sc in selected[:5]:
         symbol = (c.get("symbol") or "").upper()
         price = c.get("current_price") or 0
-        msg += f"{symbol}\nFiyat: ${price:.4f}\nSkor: {sc}\n\n"
+        rank = c.get("market_cap_rank") or 0
+        p1h = c.get("price_change_percentage_1h_in_currency") or 0
+        p24 = c.get("price_change_percentage_24h_in_currency") or 0
+
+        msg += (
+            f"{symbol}\n"
+            f"Rank: {rank}\n"
+            f"Fiyat: ${price:.6f}\n"
+            f"1s: {p1h:.2f}%\n"
+            f"24s: {p24:.2f}%\n"
+            f"Skor: {sc}\n\n"
+        )
 
     print(msg)
     send_telegram(msg)
 
+# =========================
 # LOOP
+# =========================
 def radar_loop():
+    send_telegram("🚀 GEM RADAR AKTIF - sistem çalışıyor")
+
     while True:
         try:
             hour = tr_now().hour
+            print("Saat:", hour)
+
             if START_HOUR <= hour < END_HOUR:
                 analyze()
+                print(f"{ACTIVE_SLEEP} saniye bekleniyor...")
                 time.sleep(ACTIVE_SLEEP)
             else:
+                print("Uyku modu...")
                 time.sleep(SLEEP_MODE)
+
         except Exception as e:
-            print("Hata:", e)
+            print("Genel hata:", e)
+            send_telegram(f"⚠️ GEM RADAR HATA: {e}")
             time.sleep(60)
 
+# =========================
 # MAIN
+# =========================
 if __name__ == "__main__":
     threading.Thread(target=radar_loop, daemon=True).start()
     port = int(os.environ.get("PORT", 8080))
