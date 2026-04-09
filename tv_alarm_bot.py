@@ -4,8 +4,8 @@ import os
 
 app = Flask(__name__)
 
-TOKEN = os.environ.get("TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")
+TOKEN = os.environ.get("AAHE-60FofyqLzv1Flo0kG8EYpE69hYS0U4")
+CHAT_ID = os.environ.get("1307136561")
 
 def send_telegram(message):
     if not TOKEN or not CHAT_ID:
