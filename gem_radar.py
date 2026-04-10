@@ -15,19 +15,16 @@ TELEGRAM_API = "https://api.telegram.org"
 BOT_TOKEN = "8763528906:AAE7rwoVLNfQJaLxkPvmGttBTtcx2Avntjs"
 CHAT_ID = "1307136561"
 
-CHECK_INTERVAL = 900  # 15 dakika
-SLEEP_BETWEEN_CALLS = 1.2
-
+CHECK_INTERVAL = 1200   # 20 dakika
+SLEEP_BETWEEN_CALLS = 2.5
 RANK_MIN = 200
 RANK_MAX = 500
-TOP_CANDIDATES_LIMIT = 10
+TOP_CANDIDATES_LIMIT = 5
 SEEN_FILE = "seen.json"
 
-# Minimum radar kalitesi
 MIN_TOTAL_SCORE = 60
 MIN_FLOW_SCORE = 6
 
-# Temel puan ağırlıkları
 WEIGHTS = {
     "rank_score": 10,
     "narrative_score": 20,
@@ -38,7 +35,6 @@ WEIGHTS = {
     "technical_score": 10,
 }
 
-# Aktif anlatılar / sektörler
 ACTIVE_NARRATIVES = {
     "ai": 20,
     "artificial-intelligence": 20,
@@ -53,7 +49,6 @@ ACTIVE_NARRATIVES = {
     "meme": 8,
 }
 
-# Güçlü destek sinyalleri
 STRONG_SUPPORT_KEYWORDS = [
     "binance labs",
     "coinbase ventures",
@@ -83,7 +78,6 @@ MID_SUPPORT_KEYWORDS = [
     "ava labs",
 ]
 
-# Ekip / aktivite kelimeleri
 TEAM_ACTIVE_KEYWORDS = [
     "partnership",
     "integration",
@@ -97,7 +91,6 @@ TEAM_ACTIVE_KEYWORDS = [
     "collaboration",
 ]
 
-# Bilinen ekip / advisor / etkili isimler
 ELITE_NAMES = [
     "vitalik buterin",
     "changpeng zhao",
@@ -123,20 +116,31 @@ ELITE_NAMES = [
 
 HEADERS = {
     "accept": "application/json",
-    "user-agent": "gem-radar-final/1.0"
+    "user-agent": "gem-radar-final/1.1"
 }
 
 # =========================================================
 # YARDIMCI
 # =========================================================
 def safe_get(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
-    try:
-        r = requests.get(url, params=params, headers=HEADERS, timeout=25)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        print(f"[HATA] GET {url} -> {e}")
-        return None
+    for attempt in range(3):
+        try:
+            r = requests.get(url, params=params, headers=HEADERS, timeout=25)
+
+            if r.status_code == 429:
+                wait_time = 8 + attempt * 8
+                print(f"[429] Limit yedi. {wait_time} sn bekleniyor...")
+                time.sleep(wait_time)
+                continue
+
+            r.raise_for_status()
+            return r.json()
+
+        except Exception as e:
+            print(f"[HATA] GET {url} -> {e}")
+            time.sleep(3 + attempt * 2)
+
+    return None
 
 
 def send_telegram(message: str) -> bool:
@@ -549,7 +553,6 @@ def evaluate_coin(coin: Dict[str, Any]) -> Dict[str, Any]:
     flow_score, flow_label, vol_mcap = score_flow(coin)
     technical_score, technical_label, fake_pump = score_technical(coin)
 
-    # Bilinen isim varsa ekip puanını biraz güçlendir
     team_score = int(clamp(team_score_base + elite_team_score, 0, 10))
 
     weighted_total = (
@@ -652,6 +655,7 @@ def overall_decision(c: Dict[str, Any]) -> str:
         return "→ TRADE ADAYI"
     return "→ İZLE"
 
+
 def build_message(c: Dict[str, Any], first_seen: bool) -> str:
     header = "🆕 <b>İLK KEZ RADAR</b>" if first_seen else "💎 <b>GEM RADAR</b>"
     fake_line = "\n⚠️ <b>Fake Pump Riski:</b> Var" if c["fake_pump"] else ""
@@ -725,9 +729,19 @@ def run_once() -> None:
     for i, coin in enumerate(market_coins, start=1):
         try:
             print(f"[{i}/{len(market_coins)}] İşleniyor: {coin.get('symbol', '').upper()}")
+
+            # Ön eleme: zayıf coinlerde detay çekme, API yükünü azalt
+            p24 = pct(coin.get("price_change_percentage_24h_in_currency"))
+            vol = coin.get("total_volume") or 0
+            mcap = coin.get("market_cap") or 0
+            vol_mcap = (vol / mcap) if mcap > 0 else 0
+
+            if p24 < 1 and vol_mcap < 0.03:
+                continue
+
             result = evaluate_coin(coin)
 
-            if is_trade_candidate(result):
+            if result and is_trade_candidate(result):
                 evaluated.append(result)
 
         except Exception as e:
@@ -746,9 +760,6 @@ def run_once() -> None:
         old_score = old.get("score", 0)
         first_seen = coin_key not in seen_coins
 
-        # Spam azaltma:
-        # yeni coin ise gönder
-        # veya skor ciddi arttıysa gönder
         should_send = first_seen or c["total_score"] >= old_score + 8
 
         if should_send:
